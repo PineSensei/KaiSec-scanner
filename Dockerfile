@@ -1,10 +1,8 @@
-# Base image with Node 18 and Debian Bullseye
 FROM node:18-bullseye
 
-# Set working directory
 WORKDIR /app
 
-# Install all scanning tools and dependencies
+# Install core audit tools & dependencies
 RUN apt-get update && apt-get install -y \
   python3 \
   python3-pip \
@@ -24,20 +22,18 @@ RUN apt-get update && apt-get install -y \
 RUN git clone https://github.com/urbanadventurer/WhatWeb /opt/whatweb && \
     ln -s /opt/whatweb/whatweb /usr/local/bin/whatweb
 
-# Install Nikto manually
+# ✅ FIXED: Correct Nikto install path
 RUN git clone https://github.com/sullo/nikto.git /opt/nikto && \
-    ln -s /opt/nikto/nikto.pl /usr/local/bin/nikto && \
+    ln -s /opt/nikto/program/nikto.pl /usr/local/bin/nikto && \
     chmod +x /usr/local/bin/nikto
 
-# Copy app files
+# Copy your project files
 COPY package*.json ./
 COPY scanner.js .
 
-# Install Node.js dependencies
+# Install Node dependencies
 RUN npm install
 
-# Expose the port for Railway (very important!)
 EXPOSE 8080
 
-# Start your scanner app
 CMD ["node", "scanner.js"]
