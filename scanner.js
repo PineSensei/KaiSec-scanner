@@ -6,23 +6,34 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Main scan route
-app.post("/scan", (req, res) => {
-  const domain = req.body.domain;
-  if (!domain) {
-    return res.status(400).json({ status: "error", message: "No domain provided" });
+function cleanDomain(inputUrl) {
+  try {
+    const parsed = new URL(inputUrl);
+    return {
+      host: parsed.hostname, // store-signature.com
+      full: inputUrl.startsWith("http") ? inputUrl : `http://${parsed.hostname}`
+    };
+  } catch (e) {
+    return { host: inputUrl, full: `http://${inputUrl}` };
   }
+}
+
+app.post("/scan", (req, res) => {
+  const input = req.body.domain;
+  if (!input) return res.status(400).json({ status: "error", message: "No domain provided" });
+
+  const { host, full } = cleanDomain(input);
 
   const tools = [
-    `whatweb ${domain}`,
-    `nmap ${domain}`,
-    `nikto -h ${domain}`,
-    `dirb http://${domain}`,
-    `whois ${domain}`,
-    `nslookup ${domain}`
+    `whatweb ${full}`,
+    `nmap ${host}`,
+    `nikto -h ${full}`,
+    `dirb ${full}`,
+    `whois ${host}`,
+    `nslookup ${host}`
   ];
 
-  let results = [];
+  const results = [];
   let current = 0;
 
   const runNext = () => {
@@ -31,7 +42,7 @@ app.post("/scan", (req, res) => {
     }
 
     const command = tools[current];
-    exec(command, (err, stdout, stderr) => {
+    exec(command, { timeout: 20000 }, (err, stdout, stderr) => {
       results.push({
         tool: command.split(" ")[0],
         command,
@@ -45,8 +56,7 @@ app.post("/scan", (req, res) => {
   runNext();
 });
 
-// Listen on port 8080 (Railway default)
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`KaiSec scanner is running on port ${PORT}`);
+  console.log(`KaiSec scanner running on port ${PORT}`);
 });
