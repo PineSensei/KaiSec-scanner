@@ -1,50 +1,37 @@
-const { OpenAI } = require("openai");
-const express = require("express");
-const cors = require("cors");
+const { Configuration, OpenAIApi } = require("openai");
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+const configuration = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+const openai = new OpenAIApi(configuration);
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-function buildPrompt(results) {
-  return `
-You are a cybersecurity auditor for a small business platform.
-
-Explain this scan in a friendly way:
-- Summarize each tool’s findings (like Nikto, Nmap, Dirb)
-- Explain risks in plain English
-- Give easy, specific fix steps (e.g., "Install the plugin XYZ to add missing security headers")
-
-Avoid technical jargon. Speak as if you're explaining this to a business owner with no IT background.
-
-Here is the scan result:
-${JSON.stringify(results, null, 2)}
-`;
-}
-
-app.post("/summarize", async (req, res) => {
-  const { results } = req.body;
-  if (!results) return res.status(400).json({ error: "Missing results" });
+module.exports = async function summarize(results) {
+  const text = results
+    .map(
+      (r) =>
+        `Tool: ${r.tool}\nCommand: ${r.command}\nOutput:\n${r.output}\n---\n`
+    )
+    .join("\n");
 
   try {
-    const prompt = buildPrompt(results);
-
-    const completion = await openai.chat.completions.create({
+    const gptResponse = await openai.createChatCompletion({
       model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert cybersecurity auditor. Based on the raw tool outputs, provide a clear and concise security audit summary in markdown. Use bullet points. Prioritize any vulnerabilities, outdated software, misconfigurations, or missing headers.",
+        },
+        {
+          role: "user",
+          content: text,
+        },
+      ],
+      temperature: 0.4,
     });
 
-    res.json({ summary: completion.choices[0].message.content });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "GPT summarization failed" });
+    return gptResponse.data.choices[0].message.content.trim();
+  } catch (err) {
+    return `Summary error: ${err.message}`;
   }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`KaiSec summary server running on port ${PORT}`);
-});
+};
