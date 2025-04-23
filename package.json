@@ -1,11 +1,12 @@
 {
   "name": "kaisec-scanner",
   "version": "1.0.0",
-  "description": "Automated website security scanner for KaiSec",
+  "description": "Automated web security scanner",
   "main": "scanner.js",
   "scripts": {
     "start": "node scanner.js"
   },
-  "author": "KaiSec",
-  "license": "MIT"
+  "dependencies": {
+    "express": "^4.18.2"
+  }
 }
