@@ -1,10 +1,10 @@
-# Use a base image with Node.js and Python
+# Base image
 FROM node:18-bullseye
 
-# Set working directory
+# Working directory
 WORKDIR /app
 
-# Install dependencies
+# Install apt packages
 RUN apt-get update && \
     apt-get install -y \
     python3 \
@@ -19,18 +19,22 @@ RUN apt-get update && \
     whois \
     netcat \
     dirb \
-    nikto
+    perl
 
 # Install WhatWeb manually
 RUN git clone https://github.com/urbanadventurer/WhatWeb /opt/whatweb && \
     ln -s /opt/whatweb/whatweb /usr/local/bin/whatweb
 
+# Install Nikto manually
+RUN git clone https://github.com/sullo/nikto.git /opt/nikto && \
+    ln -s /opt/nikto/nikto.pl /usr/local/bin/nikto
+
 # Copy project files
 COPY package*.json ./
 COPY scanner.js .
 
-# Install Node dependencies
+# Install Node.js dependencies
 RUN npm install
 
-# Set default command
+# Run the scanner
 CMD ["node", "scanner.js"]
