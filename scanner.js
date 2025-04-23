@@ -1,43 +1,49 @@
 const express = require("express");
-const { exec } = require("child_process");
-const bodyParser = require("body-parser");
-
 const app = express();
-app.use(bodyParser.json());
+const { exec } = require("child_process");
+
+app.use(express.json());
 
 app.post("/scan", async (req, res) => {
-  const domain = req.body.domain;
-  if (!domain) return res.status(400).json({ error: "No domain provided." });
-
-  const tools = {
-    whatweb: `whatweb ${domain}`,
-    nuclei: `nuclei -u ${domain} -silent`,
-    nikto: `nikto -h ${domain}`,
-    sslyze: `python3 tools/sslyze/sslyze/__main__.py --regular ${domain}`,
-    httpx: `echo ${domain} | httpx -silent`,
-    dirsearch: `python3 /usr/local/bin/dirsearch -u ${domain} -e php,html,txt -x 403 -t 5`,
-    waybackurls: `echo ${domain} | tools/waybackurls/waybackurls`,
-    subfinder: `subfinder -d ${domain} -silent`
-  };
-
-  const results = {};
-
-  const runCommand = (name, cmd) => {
-    return new Promise((resolve) => {
-      exec(cmd, { maxBuffer: 1024 * 5000 }, (err, stdout, stderr) => {
-        results[name] = stdout || stderr || "No output";
-        resolve();
-      });
-    });
-  };
-
-  for (let [name, cmd] of Object.entries(tools)) {
-    await runCommand(name, cmd);
+  const { domain } = req.body;
+  if (!domain) {
+    return res.status(400).json({ status: "error", message: "No domain provided" });
   }
 
-  res.json({ scanned: domain, results });
+  const tools = [
+    `nmap -F ${domain}`,
+    `whatweb ${domain}`,
+    `nikto -h ${domain}`,
+    `curl -I http://${domain}`,
+    `host ${domain}`,
+    `whois ${domain}`,
+    `nslookup ${domain}`
+  ];
+
+  const results = [];
+
+  for (const cmd of tools) {
+    try {
+      const output = await new Promise((resolve, reject) => {
+        exec(cmd, (error, stdout, stderr) => {
+          if (error) return resolve(`[Error] ${cmd}: ${stderr}`);
+          return resolve(`[OK] ${cmd}:\n${stdout}`);
+        });
+      });
+      results.push(output);
+    } catch (e) {
+      results.push(`[Fail] ${cmd}`);
+    }
+  }
+
+  res.json({
+    status: "success",
+    domain,
+    report: results.join("\n\n")
+  });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`KaiSec scanner running on port ${PORT}`));
-
+app.listen(PORT, () => {
+  console.log(`KaiSec scanner running on port ${PORT}`);
+});
