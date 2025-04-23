@@ -65,4 +65,17 @@ app.post("/scan", async (req, res) => {
       results.push({
         tool: command.split(" ")[0],
         command,
-        output: stdout || stderr || err?.message
+        output: stdout || stderr || err?.message || "No output"
+      });
+      current++;
+      runNext();
+    });
+  };
+
+  runNext();
+});
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`KaiSec scanner running on port ${PORT}`);
+});
