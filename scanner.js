@@ -7,12 +7,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Clean URL into hostname + full http(s) version
 function cleanDomain(inputUrl) {
   try {
     const parsed = new URL(inputUrl);
     return {
-      host: parsed.hostname, // e.g., store-signature.com
+      host: parsed.hostname,
       full: inputUrl.startsWith("http") ? inputUrl : `http://${parsed.hostname}`,
       isHttps: parsed.protocol === "https:"
     };
@@ -21,7 +20,6 @@ function cleanDomain(inputUrl) {
   }
 }
 
-// Resolve IP from hostname
 async function resolveIP(hostname) {
   try {
     const result = await dns.lookup(hostname);
@@ -37,7 +35,7 @@ app.post("/scan", async (req, res) => {
     return res.status(400).json({ status: "error", message: "No domain provided" });
   }
 
-  const { host, full, isHttps } = cleanDomain(input);
+  const { host, full } = cleanDomain(input);
   const ip = await resolveIP(host);
 
   if (!ip) {
@@ -48,7 +46,7 @@ app.post("/scan", async (req, res) => {
     `whatweb ${full}`,
     `nmap -F ${ip}`,
     `nikto -h ${full}`,
-    `dirb http://${host}`,
+    `dirb http://${host} /usr/share/dirb/wordlists/small.txt -f`,
     `whois ${host.replace(/^www\./, '')}`,
     `nslookup ${host}`
   ];
@@ -66,7 +64,7 @@ app.post("/scan", async (req, res) => {
       results.push({
         tool: command.split(" ")[0],
         command,
-        output: stdout || stderr || err?.message || "No output"
+        output: (stdout || stderr || err?.message || "No output").replace(/\u001b\[[0-9;]*m/g, '')
       });
       current++;
       runNext();
