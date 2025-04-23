@@ -1,49 +1,52 @@
 const express = require("express");
-const app = express();
 const { exec } = require("child_process");
+const cors = require("cors");
 
+const app = express();
+app.use(cors());
 app.use(express.json());
 
-app.post("/scan", async (req, res) => {
-  const { domain } = req.body;
+// Main scan route
+app.post("/scan", (req, res) => {
+  const domain = req.body.domain;
   if (!domain) {
     return res.status(400).json({ status: "error", message: "No domain provided" });
   }
 
   const tools = [
-    `nmap -F ${domain}`,
     `whatweb ${domain}`,
+    `nmap ${domain}`,
     `nikto -h ${domain}`,
-    `curl -I http://${domain}`,
-    `host ${domain}`,
+    `dirb http://${domain}`,
     `whois ${domain}`,
     `nslookup ${domain}`
   ];
 
-  const results = [];
+  let results = [];
+  let current = 0;
 
-  for (const cmd of tools) {
-    try {
-      const output = await new Promise((resolve, reject) => {
-        exec(cmd, (error, stdout, stderr) => {
-          if (error) return resolve(`[Error] ${cmd}: ${stderr}`);
-          return resolve(`[OK] ${cmd}:\n${stdout}`);
-        });
-      });
-      results.push(output);
-    } catch (e) {
-      results.push(`[Fail] ${cmd}`);
+  const runNext = () => {
+    if (current >= tools.length) {
+      return res.json({ status: "ok", results });
     }
-  }
 
-  res.json({
-    status: "success",
-    domain,
-    report: results.join("\n\n")
-  });
+    const command = tools[current];
+    exec(command, (err, stdout, stderr) => {
+      results.push({
+        tool: command.split(" ")[0],
+        command,
+        output: stdout || stderr || err?.message || "No output"
+      });
+      current++;
+      runNext();
+    });
+  };
+
+  runNext();
 });
 
-const PORT = process.env.PORT || 3000;
+// Listen on port 8080 (Railway default)
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`KaiSec scanner running on port ${PORT}`);
+  console.log(`KaiSec scanner is running on port ${PORT}`);
 });
