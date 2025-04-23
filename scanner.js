@@ -7,16 +7,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Clean input into hostname + full URL
+// Clean URL into hostname + full http(s) version
 function cleanDomain(inputUrl) {
   try {
     const parsed = new URL(inputUrl);
     return {
-      host: parsed.hostname, // e.g. store-signature.com
-      full: inputUrl.startsWith("http") ? inputUrl : `http://${parsed.hostname}`
+      host: parsed.hostname, // e.g., store-signature.com
+      full: inputUrl.startsWith("http") ? inputUrl : `http://${parsed.hostname}`,
+      isHttps: parsed.protocol === "https:"
     };
   } catch (e) {
-    return { host: inputUrl, full: `http://${inputUrl}` };
+    return { host: inputUrl, full: `http://${inputUrl}`, isHttps: false };
   }
 }
 
@@ -36,7 +37,7 @@ app.post("/scan", async (req, res) => {
     return res.status(400).json({ status: "error", message: "No domain provided" });
   }
 
-  const { host, full } = cleanDomain(input);
+  const { host, full, isHttps } = cleanDomain(input);
   const ip = await resolveIP(host);
 
   if (!ip) {
@@ -45,10 +46,10 @@ app.post("/scan", async (req, res) => {
 
   const tools = [
     `whatweb ${full}`,
-    `nmap ${ip}`,
+    `nmap -F ${ip}`,
     `nikto -h ${full}`,
-    `dirb ${full}`,
-    `whois ${host}`,
+    `dirb http://${host}`,
+    `whois ${host.replace(/^www\./, '')}`,
     `nslookup ${host}`
   ];
 
