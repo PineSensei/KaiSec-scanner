@@ -1,80 +1,99 @@
 const express = require("express");
-const { exec } = require("child_process");
 const cors = require("cors");
-const dns = require("dns").promises;
+const { exec } = require("child_process");
+const summarize = require("./summarize");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-function cleanDomain(inputUrl) {
-  try {
-    const parsed = new URL(inputUrl);
-    return {
-      host: parsed.hostname,
-      full: inputUrl.startsWith("http") ? inputUrl : `http://${parsed.hostname}`,
-      isHttps: parsed.protocol === "https:"
-    };
-  } catch (e) {
-    return { host: inputUrl, full: `http://${inputUrl}`, isHttps: false };
-  }
+function extractIPFromWhatWeb(output) {
+  const ipMatch = output.match(/IP\[[^\[\]]*([\d.]+)[^\[\]]*\]/);
+  return ipMatch ? ipMatch[1] : null;
 }
 
-async function resolveIP(hostname) {
-  try {
-    const result = await dns.lookup(hostname);
-    return result.address;
-  } catch (e) {
-    return null;
+function cleanOutput(tool, output) {
+  if (tool === "dirb") {
+    return output
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("--> Testing:"))
+      .join("\n");
   }
+  return output;
 }
 
 app.post("/scan", async (req, res) => {
-  const input = req.body.domain;
-  if (!input) {
-    return res.status(400).json({ status: "error", message: "No domain provided" });
-  }
-
-  const { host, full } = cleanDomain(input);
-  const ip = await resolveIP(host);
-
-  if (!ip) {
-    return res.status(400).json({ status: "error", message: "Could not resolve IP for domain" });
-  }
+  const { domain } = req.body;
+  if (!domain) return res.status(400).json({ error: "Domain is required" });
 
   const tools = [
-    `whatweb ${full}`,
-    `nmap -F ${ip}`,
-    `nikto -h ${full}`,
-    `dirb http://${host} /usr/share/dirb/wordlists/small.txt -f`,
-    `whois ${host.replace(/^www\./, '')}`,
-    `nslookup ${host}`
+    {
+      name: "whatweb",
+      command: `whatweb ${domain}`,
+    },
+    {
+      name: "nmap",
+      command: "", // placeholder for dynamic IP-based command
+    },
+    {
+      name: "nikto",
+      command: `nikto -h ${domain}`,
+    },
+    {
+      name: "dirb",
+      command: `dirb http://${domain.replace(/^https?:\/\//, "")} /usr/share/dirb/wordlists/small.txt -f`,
+    },
+    {
+      name: "whois",
+      command: `whois ${domain.replace(/^https?:\/\//, "").replace(/\/.*/, "")}`,
+    },
+    {
+      name: "nslookup",
+      command: `nslookup ${domain.replace(/^https?:\/\//, "").replace(/\/.*/, "")}`,
+    },
   ];
 
   const results = [];
-  let current = 0;
 
-  const runNext = () => {
-    if (current >= tools.length) {
-      return res.json({ status: "ok", results });
+  for (const tool of tools) {
+    let output = "";
+    try {
+      if (tool.name === "nmap") {
+        const whatwebResult = results.find((r) => r.tool === "whatweb");
+        const ip = extractIPFromWhatWeb(whatwebResult?.output || "");
+        if (ip) {
+          tool.command = `nmap -F ${ip}`;
+        } else {
+          throw new Error("IP address not found for nmap");
+        }
+      }
+
+      output = await new Promise((resolve, reject) => {
+        exec(tool.command, { timeout: 20000 }, (error, stdout, stderr) => {
+          if (error) {
+            resolve(`Error: ${stderr || error.message}`);
+          } else {
+            resolve(stdout);
+          }
+        });
+      });
+    } catch (err) {
+      output = `Execution error: ${err.message}`;
     }
 
-    const command = tools[current];
-    exec(command, { timeout: 20000 }, (err, stdout, stderr) => {
-      results.push({
-        tool: command.split(" ")[0],
-        command,
-        output: (stdout || stderr || err?.message || "No output").replace(/\u001b\[[0-9;]*m/g, '')
-      });
-      current++;
-      runNext();
+    results.push({
+      tool: tool.name,
+      command: tool.command,
+      output: cleanOutput(tool.name, output),
     });
-  };
+  }
 
-  runNext();
+  const summary = await summarize(results);
+
+  res.json({ status: "ok", summary, results });
 });
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`KaiSec scanner running on port ${PORT}`);
+  console.log(`Scanner API running on port ${PORT}`);
 });
