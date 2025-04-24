@@ -1,14 +1,13 @@
 {
   "name": "kaisec-scanner",
   "version": "1.0.0",
-  "description": "Automated web security scanner for KaiSec",
+  "description": "KaiSec's web scanner",
   "main": "scanner.js",
   "scripts": {
     "start": "node scanner.js"
   },
-  "author": "KaiSec",
-  "license": "MIT",
   "dependencies": {
+    "openai": "^4.26.0",          // ✅ Compatible with GPT-4o (including mini)
     "express": "^4.18.2",
     "cors": "^2.8.5"
   }
