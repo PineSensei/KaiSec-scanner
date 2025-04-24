@@ -30,10 +30,10 @@ RUN git clone https://github.com/urbanadventurer/WhatWeb /opt/whatweb && \
 
 # Clone and set up Nikto
 RUN git clone https://github.com/sullo/nikto.git /opt/nikto && \
-    ln -s /opt/nikto/program/nikto.pl /usr/local/bin/nikto && \
-    chmod +x /usr/local/bin/nikto
+    chmod +x /opt/nikto/program/nikto.pl && \
+    ln -s /opt/nikto/program/nikto.pl /usr/local/bin/nikto
 
-# Copy Node.js files
+# Copy Node.js project files
 COPY package*.json ./
 COPY scanner.js .
 COPY summarize.js .
@@ -41,8 +41,11 @@ COPY summarize.js .
 # Install Node.js dependencies
 RUN npm install
 
-# Expose a port (if your app needs to be accessed externally)
+# Expose the port your app listens on
 EXPOSE 8080
 
-# Run the scanner
+# Set environment variable for OpenAI (can be overridden by Railway env)
+ENV NODE_ENV=production
+
+# Start the app
 CMD ["node", "scanner.js"]
