@@ -26,6 +26,7 @@ app.post("/scan", async (req, res) => {
   const { domain } = req.body;
   if (!domain) return res.status(400).json({ error: "Domain is required" });
 
+  const results = [];
   const tools = [
     {
       name: "whatweb",
@@ -33,15 +34,15 @@ app.post("/scan", async (req, res) => {
     },
     {
       name: "nmap",
-      command: "", // placeholder for dynamic IP-based command
+      command: "", // will set dynamically after whatweb
     },
     {
       name: "nikto",
-      command: `nikto -h ${domain}`,
+      command: `perl /opt/nikto/program/nikto.pl -h ${domain}`,
     },
     {
       name: "dirb",
-      command: `dirb http://${domain.replace(/^https?:\/\//, "")} /usr/share/dirb/wordlists/small.txt -f`,
+      command: `dirb http://${domain.replace(/^https?:\/\//, "")} /usr/share/dirb/wordlists/common.txt -f`,
     },
     {
       name: "whois",
@@ -53,8 +54,6 @@ app.post("/scan", async (req, res) => {
     },
   ];
 
-  const results = [];
-
   for (const tool of tools) {
     let output = "";
     try {
@@ -62,7 +61,7 @@ app.post("/scan", async (req, res) => {
         const whatwebResult = results.find((r) => r.tool === "whatweb");
         const ip = extractIPFromWhatWeb(whatwebResult?.output || "");
         if (ip) {
-          tool.command = `nmap -F ${ip}`;
+          tool.command = `nmap -Pn -F ${ip}`;
         } else {
           throw new Error("IP address not found for nmap");
         }
