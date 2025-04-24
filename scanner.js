@@ -37,7 +37,7 @@ app.post("/scan", async (req, res) => {
     },
     {
       name: "nmap",
-      command: "", // placeholder for dynamic IP-based command
+      command: "",
     },
     {
       name: "nikto",
@@ -63,10 +63,46 @@ app.post("/scan", async (req, res) => {
 
   for (const tool of tools) {
     let output = "";
-
     try {
       if (tool.name === "nmap") {
         const whatwebResult = results.find((r) => r.tool === "whatweb");
         const ip = extractIPFromWhatWeb(whatwebResult?.output || "");
         if (ip) {
-          tool.command = `nmap -
+          tool.command = `nmap -F ${ip}`;
+        } else {
+          throw new Error("IP address not found for nmap");
+        }
+      }
+
+      output = await new Promise((resolve) => {
+        exec(tool.command, { timeout: 20000 }, (error, stdout, stderr) => {
+          if (error) {
+            resolve(`Error: ${stderr || error.message}`);
+          } else {
+            resolve(stdout);
+          }
+        });
+      });
+
+      if (tool.heavy) {
+        await delay(1000);
+      }
+    } catch (err) {
+      output = `Execution error: ${err.message}`;
+    }
+
+    results.push({
+      tool: tool.name,
+      command: tool.command,
+      output: cleanOutput(tool.name, output),
+    });
+  }
+
+  const summary = await summarize(results);
+  res.json({ status: "ok", summary, results });
+});
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`Scanner API running on port ${PORT}`);
+});
