@@ -1,37 +1,27 @@
-const { Configuration, OpenAIApi } = require("openai");
-
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
+const OpenAI = require('openai');
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
 });
-const openai = new OpenAIApi(configuration);
 
-module.exports = async function summarize(results) {
+module.exports = async function summarizeResults(results) {
   const text = results
-    .map(
-      (r) =>
-        `Tool: ${r.tool}\nCommand: ${r.command}\nOutput:\n${r.output}\n---\n`
-    )
-    .join("\n");
+    .map(r => `[${r.tool}]\n${r.output.slice(0, 1000)}`) // Truncate overly long output
+    .join('\n\n');
 
-  try {
-    const gptResponse = await openai.createChatCompletion({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an expert cybersecurity auditor. Based on the raw tool outputs, provide a clear and concise security audit summary in markdown. Use bullet points. Prioritize any vulnerabilities, outdated software, misconfigurations, or missing headers.",
-        },
-        {
-          role: "user",
-          content: text,
-        },
-      ],
-      temperature: 0.4,
-    });
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a cybersecurity analyst. Summarize the scan results in a concise, professional tone. Point out any risks or findings clearly.'
+      },
+      {
+        role: 'user',
+        content: `Here are the scan results:\n${text}`
+      }
+    ],
+    temperature: 0.4
+  });
 
-    return gptResponse.data.choices[0].message.content.trim();
-  } catch (err) {
-    return `Summary error: ${err.message}`;
-  }
+  return completion.choices[0].message.content.trim();
 };
